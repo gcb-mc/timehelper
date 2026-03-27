@@ -117,18 +117,51 @@
     .profile-bar button:hover { border-color: #6366f1; color: #e2e8f0; }
 
     .input-row { display: flex; gap: 8px; margin-bottom: 28px; }
-    .input-row select {
-      flex: 1; padding: 12px 14px; border: 2px solid #334155; border-radius: 8px;
-      font-size: 1rem; background: #1e293b; color: #e2e8f0; outline: none;
-      transition: border-color 0.2s; cursor: pointer;
-    }
-    .input-row select:focus { border-color: #6366f1; }
     .input-row button {
       padding: 12px 20px; background: #6366f1; color: #fff; border: none;
       border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
       white-space: nowrap;
     }
     .input-row button:hover { background: #4f46e5; }
+
+    /* ── Searchable timezone dropdown ── */
+    .tz-search-wrap {
+      flex: 1; position: relative;
+    }
+    .tz-search-input {
+      width: 100%; padding: 12px 14px; border: 2px solid #334155; border-radius: 8px;
+      font-size: 1rem; background: #1e293b; color: #e2e8f0; outline: none;
+      transition: border-color 0.2s; cursor: text;
+    }
+    .tz-search-input:focus { border-color: #6366f1; }
+    .tz-search-input::placeholder { color: #64748b; }
+    .tz-dropdown {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #1e293b; border: 2px solid #6366f1; border-radius: 8px;
+      max-height: 320px; overflow-y: auto; z-index: 100;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .tz-dropdown.open { display: block; }
+    .tz-dropdown::-webkit-scrollbar { width: 6px; }
+    .tz-dropdown::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    .tz-dropdown-group {
+      padding: 6px 14px; font-size: 0.75rem; color: #6366f1; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      background: #0f172a; position: sticky; top: 0;
+    }
+    .tz-dropdown-item {
+      padding: 10px 14px; color: #e2e8f0; font-size: 0.9rem; cursor: pointer;
+      transition: background 0.1s;
+    }
+    .tz-dropdown-item:hover, .tz-dropdown-item.highlighted {
+      background: #334155;
+    }
+    .tz-dropdown-item .tz-offset-badge {
+      color: #94a3b8; font-size: 0.8rem; margin-left: 6px;
+    }
+    .tz-dropdown-empty {
+      padding: 16px 14px; color: #64748b; text-align: center; font-size: 0.9rem;
+    }
 
     .tz-card {
       background: #1e293b; border-radius: 10px; padding: 16px 18px; margin-bottom: 10px;
@@ -221,7 +254,11 @@
       <h1>Time Zone Lookup</h1>
       <p class="subtitle">Track the current time across multiple time zones</p>
       <div class="input-row">
-        <select id="tzSelect"><option value="">-- Select a time zone --</option></select>
+        <div class="tz-search-wrap">
+          <input type="text" class="tz-search-input" id="tzSearchInput" placeholder="🔍 Search time zones…" autocomplete="off">
+          <div class="tz-dropdown" id="tzDropdown"></div>
+        </div>
+        <input type="hidden" id="tzSelect" value="">
         <button id="addBtn">Add</button>
       </div>
       <p class="error-msg" id="errorMsg"></p>
@@ -533,14 +570,112 @@ function finishSetup(country, timezone) {
 //  Main App (Time Zone Lookup — enhanced)
 // ═══════════════════════════════════════════════════
 const tzSelect = document.getElementById('tzSelect');
+const tzSearchInput = document.getElementById('tzSearchInput');
+const tzDropdown = document.getElementById('tzDropdown');
 const addBtn = document.getElementById('addBtn');
 const tzList = document.getElementById('tzList');
 const emptyMsg = document.getElementById('emptyMsg');
 const errorMsg = document.getElementById('errorMsg');
 
 const allTimeZones = Intl.supportedValuesOf('timeZone');
+
+// Common-name aliases so users can search "hawaii", "india", "east coast", etc.
+const TZ_KEYWORDS = {
+  'Pacific/Honolulu':                      ['hawaii', 'hst', 'honolulu'],
+  'America/Anchorage':                     ['alaska', 'akst', 'akdt', 'anchorage'],
+  'America/Adak':                          ['alaska', 'aleutian islands'],
+  'America/Juneau':                        ['alaska', 'juneau'],
+  'America/Nome':                          ['alaska', 'nome'],
+  'America/Sitka':                         ['alaska', 'sitka'],
+  'America/Metlakatla':                    ['alaska', 'metlakatla'],
+  'America/Yakutat':                       ['alaska', 'yakutat'],
+  'America/Los_Angeles':                   ['pacific time', 'pst', 'pdt', 'california', 'la', 'west coast', 'san francisco', 'seattle', 'portland', 'vegas', 'las vegas'],
+  'America/Vancouver':                     ['pacific time', 'pst', 'pdt', 'british columbia', 'bc', 'vancouver'],
+  'America/Phoenix':                       ['arizona', 'mst', 'phoenix', 'tucson'],
+  'America/Denver':                        ['mountain time', 'mst', 'mdt', 'denver', 'colorado', 'rocky mountain', 'salt lake city', 'utah'],
+  'America/Edmonton':                      ['mountain time', 'mst', 'mdt', 'alberta', 'calgary'],
+  'America/Chicago':                       ['central time', 'cst', 'cdt', 'chicago', 'dallas', 'houston', 'midwest', 'texas'],
+  'America/Winnipeg':                      ['central time', 'cst', 'cdt', 'winnipeg', 'manitoba'],
+  'America/Mexico_City':                   ['mexico', 'cdmx', 'mexico city'],
+  'America/New_York':                      ['eastern time', 'est', 'edt', 'new york', 'nyc', 'east coast', 'boston', 'miami', 'atlanta', 'washington dc'],
+  'America/Toronto':                       ['eastern time', 'est', 'edt', 'toronto', 'ontario'],
+  'America/Detroit':                       ['eastern time', 'est', 'edt', 'detroit', 'michigan'],
+  'America/Indiana/Indianapolis':          ['indiana', 'indianapolis', 'est'],
+  'America/Halifax':                       ['atlantic time', 'ast', 'adt', 'nova scotia', 'halifax'],
+  'America/St_Johns':                      ['newfoundland', 'nst', 'ndt'],
+  'America/Argentina/Buenos_Aires':        ['argentina', 'buenos aires', 'art'],
+  'America/Sao_Paulo':                     ['brazil', 'brasilia', 'sao paulo', 'brt'],
+  'America/Bogota':                        ['colombia', 'bogota', 'col'],
+  'America/Lima':                          ['peru', 'lima'],
+  'America/Santiago':                      ['chile', 'santiago'],
+  'America/Caracas':                       ['venezuela', 'caracas'],
+  'Europe/London':                         ['uk', 'united kingdom', 'england', 'britain', 'gmt', 'bst', 'greenwich', 'london'],
+  'Europe/Dublin':                         ['ireland', 'ist', 'dublin'],
+  'Europe/Paris':                          ['france', 'paris', 'cet', 'cest'],
+  'Europe/Berlin':                         ['germany', 'berlin', 'cet'],
+  'Europe/Madrid':                         ['spain', 'madrid', 'cet'],
+  'Europe/Rome':                           ['italy', 'rome', 'milan', 'cet'],
+  'Europe/Amsterdam':                      ['netherlands', 'holland', 'amsterdam', 'cet'],
+  'Europe/Brussels':                       ['belgium', 'brussels', 'cet'],
+  'Europe/Vienna':                         ['austria', 'vienna', 'cet'],
+  'Europe/Zurich':                         ['switzerland', 'zurich', 'cet'],
+  'Europe/Stockholm':                      ['sweden', 'stockholm', 'cet'],
+  'Europe/Oslo':                           ['norway', 'oslo', 'cet'],
+  'Europe/Copenhagen':                     ['denmark', 'copenhagen', 'cet'],
+  'Europe/Helsinki':                       ['finland', 'helsinki', 'eet'],
+  'Europe/Warsaw':                         ['poland', 'warsaw', 'cet'],
+  'Europe/Athens':                         ['greece', 'athens', 'eet'],
+  'Europe/Bucharest':                      ['romania', 'bucharest', 'eet'],
+  'Europe/Moscow':                         ['russia', 'moscow', 'msk'],
+  'Europe/Kyiv':                           ['ukraine', 'kyiv', 'kiev', 'eet'],
+  'Europe/Istanbul':                       ['turkey', 'istanbul', 'try', 'ankara'],
+  'Europe/Lisbon':                         ['portugal', 'lisbon'],
+  'Asia/Kolkata':                          ['india', 'ist', 'mumbai', 'delhi', 'new delhi', 'bombay', 'calcutta', 'kolkata', 'chennai', 'bangalore'],
+  'Asia/Karachi':                          ['pakistan', 'karachi', 'pkt', 'islamabad', 'lahore'],
+  'Asia/Dhaka':                            ['bangladesh', 'dhaka', 'bst'],
+  'Asia/Colombo':                          ['sri lanka', 'colombo'],
+  'Asia/Kathmandu':                        ['nepal', 'kathmandu'],
+  'Asia/Yangon':                           ['myanmar', 'burma', 'yangon', 'rangoon'],
+  'Asia/Bangkok':                          ['thailand', 'bangkok', 'ict', 'indochina'],
+  'Asia/Ho_Chi_Minh':                      ['vietnam', 'ho chi minh', 'saigon', 'hanoi'],
+  'Asia/Jakarta':                          ['indonesia', 'jakarta', 'wib'],
+  'Asia/Singapore':                        ['singapore', 'sgt'],
+  'Asia/Kuala_Lumpur':                     ['malaysia', 'kuala lumpur', 'myt'],
+  'Asia/Manila':                           ['philippines', 'manila', 'pht'],
+  'Asia/Shanghai':                         ['china', 'beijing', 'shanghai', 'cst', 'bst'],
+  'Asia/Hong_Kong':                        ['hong kong', 'hkt'],
+  'Asia/Taipei':                           ['taiwan', 'taipei', 'tst'],
+  'Asia/Seoul':                            ['south korea', 'korea', 'seoul', 'kst'],
+  'Asia/Tokyo':                            ['japan', 'tokyo', 'jst', 'osaka'],
+  'Asia/Dubai':                            ['uae', 'dubai', 'abu dhabi', 'gulf', 'gulf standard time'],
+  'Asia/Riyadh':                           ['saudi arabia', 'riyadh', 'ast'],
+  'Asia/Jerusalem':                        ['israel', 'jerusalem', 'tel aviv', 'ist'],
+  'Asia/Tehran':                           ['iran', 'tehran', 'irst'],
+  'Asia/Baghdad':                          ['iraq', 'baghdad', 'ast'],
+  'Asia/Kabul':                            ['afghanistan', 'kabul', 'aft'],
+  'Asia/Tashkent':                         ['uzbekistan', 'tashkent'],
+  'Asia/Almaty':                           ['kazakhstan', 'almaty'],
+  'Africa/Cairo':                          ['egypt', 'cairo', 'eet'],
+  'Africa/Johannesburg':                   ['south africa', 'johannesburg', 'sast', 'cape town', 'durban'],
+  'Africa/Lagos':                          ['nigeria', 'lagos', 'wat'],
+  'Africa/Nairobi':                        ['kenya', 'nairobi', 'eat'],
+  'Africa/Accra':                          ['ghana', 'accra'],
+  'Africa/Casablanca':                     ['morocco', 'casablanca'],
+  'Africa/Addis_Ababa':                    ['ethiopia', 'addis ababa', 'eat'],
+  'Australia/Sydney':                      ['sydney', 'aest', 'aedt', 'new south wales', 'nsw', 'eastern australia'],
+  'Australia/Melbourne':                   ['melbourne', 'victoria', 'aest', 'aedt'],
+  'Australia/Brisbane':                    ['brisbane', 'queensland', 'aest'],
+  'Australia/Perth':                       ['perth', 'western australia', 'wa', 'awst'],
+  'Australia/Adelaide':                    ['adelaide', 'south australia', 'acst', 'acdt'],
+  'Australia/Darwin':                      ['darwin', 'northern territory', 'nt', 'acst'],
+  'Pacific/Auckland':                      ['new zealand', 'auckland', 'nzst', 'nzdt', 'wellington'],
+  'Pacific/Fiji':                          ['fiji', 'fjt'],
+  'Pacific/Guam':                          ['guam', 'chst'],
+};
 const addedZones = new Set();
 let tickInterval;
+let highlightedIndex = -1;
+let tzItems = []; // flat list of { tz, label, continent } for search
 
 function loadFavorites() {
   try { return JSON.parse(localStorage.getItem('tz-favorites') || '[]'); }
@@ -555,8 +690,8 @@ function toggleFavorite(tz) {
   saveFavorites(favs);
 }
 
-// Build continent → zones map from REGION_DATA, then add uncategorised IANA zones
-(function populateTzSelect() {
+// Build searchable timezone data from REGION_DATA + uncategorised IANA zones
+(function buildTzSearchData() {
   const now = new Date();
 
   function getOffset(tz) {
@@ -577,7 +712,6 @@ function toggleFavorite(tz) {
     return (parts.find(p => p.type === 'timeZoneName') || {}).value || 'GMT';
   }
 
-  // Collect all zones per continent from REGION_DATA
   const continentZones = {};
   const coveredZones = new Set();
   for (const [continent, data] of Object.entries(REGION_DATA)) {
@@ -592,28 +726,128 @@ function toggleFavorite(tz) {
     }
   }
 
-  // Any IANA zones not covered go into "Other"
   const other = allTimeZones.filter(tz => !coveredZones.has(tz));
   if (other.length) continentZones['Other'] = other;
 
-  // Sort each group by UTC offset, then alphabetically
   for (const zones of Object.values(continentZones)) {
     zones.sort((a, b) => getOffset(a) - getOffset(b) || a.localeCompare(b));
   }
 
-  // Build <optgroup> elements
+  // Build flat list for search
   for (const [continent, zones] of Object.entries(continentZones)) {
-    const group = document.createElement('optgroup');
-    group.label = continent;
     for (const tz of zones) {
-      const opt = document.createElement('option');
-      opt.value = tz;
-      opt.textContent = `${tz.replace(/_/g, ' ')}  (${offsetLabel(tz)})`;
-      group.appendChild(opt);
+      tzItems.push({
+        tz,
+        label: tz.replace(/_/g, ' '),
+        offset: offsetLabel(tz),
+        continent,
+        searchText: `${continent} ${tz.replace(/[_/]/g, ' ')} ${offsetLabel(tz)} ${(TZ_KEYWORDS[tz] || []).join(' ')}`.toLowerCase(),
+      });
     }
-    tzSelect.appendChild(group);
   }
 })();
+
+function renderDropdown(filter = '') {
+  tzDropdown.innerHTML = '';
+  highlightedIndex = -1;
+  const query = filter.toLowerCase().trim();
+  let visibleCount = 0;
+  let currentGroup = '';
+
+  const filtered = query
+    ? tzItems.filter(item => item.searchText.includes(query))
+    : tzItems;
+
+  for (const item of filtered) {
+    if (item.continent !== currentGroup) {
+      currentGroup = item.continent;
+      const groupEl = document.createElement('div');
+      groupEl.className = 'tz-dropdown-group';
+      groupEl.textContent = currentGroup;
+      tzDropdown.appendChild(groupEl);
+    }
+    const el = document.createElement('div');
+    el.className = 'tz-dropdown-item';
+    el.dataset.tz = item.tz;
+    el.dataset.idx = visibleCount;
+    el.innerHTML = `${escapeHtml(item.label)} <span class="tz-offset-badge">${item.offset}</span>`;
+    el.addEventListener('click', () => selectTz(item));
+    el.addEventListener('mouseenter', () => {
+      highlightedIndex = parseInt(el.dataset.idx);
+      updateHighlight();
+    });
+    tzDropdown.appendChild(el);
+    visibleCount++;
+  }
+
+  if (visibleCount === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'tz-dropdown-empty';
+    empty.textContent = 'No matching time zones';
+    tzDropdown.appendChild(empty);
+  }
+}
+
+function selectTz(item) {
+  tzSelect.value = item.tz;
+  tzSearchInput.value = `${item.label}  (${item.offset})`;
+  closeTzDropdown();
+}
+
+function openTzDropdown() {
+  renderDropdown(tzSearchInput.value);
+  tzDropdown.classList.add('open');
+}
+
+function closeTzDropdown() {
+  tzDropdown.classList.remove('open');
+  highlightedIndex = -1;
+}
+
+function updateHighlight() {
+  tzDropdown.querySelectorAll('.tz-dropdown-item').forEach(el => {
+    el.classList.toggle('highlighted', parseInt(el.dataset.idx) === highlightedIndex);
+  });
+  const active = tzDropdown.querySelector('.tz-dropdown-item.highlighted');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+tzSearchInput.addEventListener('focus', openTzDropdown);
+tzSearchInput.addEventListener('input', () => {
+  tzSelect.value = '';
+  renderDropdown(tzSearchInput.value);
+  if (!tzDropdown.classList.contains('open')) tzDropdown.classList.add('open');
+});
+
+tzSearchInput.addEventListener('keydown', e => {
+  const items = tzDropdown.querySelectorAll('.tz-dropdown-item');
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+    updateHighlight();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightedIndex = Math.max(highlightedIndex - 1, 0);
+    updateHighlight();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (highlightedIndex >= 0 && items[highlightedIndex]) {
+      const tz = items[highlightedIndex].dataset.tz;
+      const item = tzItems.find(i => i.tz === tz);
+      if (item) selectTz(item);
+    }
+  } else if (e.key === 'Escape') {
+    closeTzDropdown();
+    tzSearchInput.blur();
+  }
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.tz-search-wrap')) closeTzDropdown();
+});
 
 function formatTime(tz) {
   return new Date().toLocaleTimeString('en-US', {
@@ -670,7 +904,7 @@ function addTimeZone(presetTz) {
   li.append(info, actions);
   tzList.appendChild(li);
 
-  if (!presetTz) tzSelect.value = '';
+  if (!presetTz) { tzSelect.value = ''; tzSearchInput.value = ''; }
   updateEmptyMsg();
   if (addedZones.size === 1) { clearInterval(tickInterval); tickInterval = setInterval(tickAll, 1000); }
 }
