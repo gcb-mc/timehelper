@@ -555,12 +555,65 @@ function toggleFavorite(tz) {
   saveFavorites(favs);
 }
 
-allTimeZones.forEach(tz => {
-  const option = document.createElement('option');
-  option.value = tz;
-  option.textContent = tz.replace(/_/g, ' ');
-  tzSelect.appendChild(option);
-});
+// Build continent → zones map from REGION_DATA, then add uncategorised IANA zones
+(function populateTzSelect() {
+  const now = new Date();
+
+  function getOffset(tz) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, timeZoneName: 'shortOffset',
+    }).formatToParts(now);
+    const offsetStr = (parts.find(p => p.type === 'timeZoneName') || {}).value || 'GMT';
+    const m = offsetStr.match(/GMT([+-]?\d+(?::\d+)?)?/);
+    if (!m || !m[1]) return 0;
+    const [h, min] = m[1].split(':').map(Number);
+    return h < 0 ? h - (min || 0) / 60 : h + (min || 0) / 60;
+  }
+
+  function offsetLabel(tz) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, timeZoneName: 'shortOffset',
+    }).formatToParts(now);
+    return (parts.find(p => p.type === 'timeZoneName') || {}).value || 'GMT';
+  }
+
+  // Collect all zones per continent from REGION_DATA
+  const continentZones = {};
+  const coveredZones = new Set();
+  for (const [continent, data] of Object.entries(REGION_DATA)) {
+    continentZones[continent] = [];
+    for (const zones of Object.values(data.countries)) {
+      for (const tz of zones) {
+        if (!coveredZones.has(tz)) {
+          continentZones[continent].push(tz);
+          coveredZones.add(tz);
+        }
+      }
+    }
+  }
+
+  // Any IANA zones not covered go into "Other"
+  const other = allTimeZones.filter(tz => !coveredZones.has(tz));
+  if (other.length) continentZones['Other'] = other;
+
+  // Sort each group by UTC offset, then alphabetically
+  for (const zones of Object.values(continentZones)) {
+    zones.sort((a, b) => getOffset(a) - getOffset(b) || a.localeCompare(b));
+  }
+
+  // Build <optgroup> elements
+  for (const [continent, zones] of Object.entries(continentZones)) {
+    const group = document.createElement('optgroup');
+    group.label = continent;
+    for (const tz of zones) {
+      const opt = document.createElement('option');
+      opt.value = tz;
+      opt.textContent = `${tz.replace(/_/g, ' ')}  (${offsetLabel(tz)})`;
+      group.appendChild(opt);
+    }
+    tzSelect.appendChild(group);
+  }
+})();
 
 function formatTime(tz) {
   return new Date().toLocaleTimeString('en-US', {
