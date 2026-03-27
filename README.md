@@ -63,4 +63,14 @@ Documentation on Visual Studio Code page + Agents here: https://code.visualstudi
 
 5. **Step 5**: Set the plan to actually execute by selecting: Start Implementation. You can specify Continue in Copilot CLI to hand off the plan to Copilot CLI.
 
-6. **Step 6**: That's it! You can track the Copilot CLI session in the Sessions view. Review and approve changes, commit to github, preview app.
+6. **Step 6**: That's it! You can track the Copilot CLI session in the Sessions view. Review and approve changes, commit to github, and preview app.
+
+### 1.3 Example for TimeZone App
+
+After the first app based on that prompt, choose whatever other application you want to build with your new best-friends, aka GHCP and Copilot CLI. This is the prompt I used to build an app that helps me plan customer meetings with global timezone requirements. (There has to be a better way than me googling time GMT every day lol).
+  ```
+   create another app in a new folder that is a simple time zone look up app with HTML, CSS and JavaScript. Include an input field to select time zones, a list to display them, and a delete button for each item.
+   ```
+
+- This is literally all I started with for this process and I was able to see the app (locally) within 5 minutes. These are the next steps I recommend to improve upon this app and take advantage of all the agent options in Visual Studio.
+
