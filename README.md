@@ -16,7 +16,7 @@ This repo is not built for dev's or AI engineers, nothing fancy going on here. I
       - index.html (basic app to see time zones)
   - docs/
       - VS-Code-Copilot-Instructions.md
-  - README.md (you are here)
+- README.md (you are here)
  
 ## 1. Phase 1: Agents to Help Code
 I set up agents in Visual Studio Code to create an app. Here's the quick guide to set this up, for further information see the docs in this repo.
