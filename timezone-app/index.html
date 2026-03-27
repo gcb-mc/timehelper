@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time Zone Lookup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+
+    .container { width: 100%; max-width: 660px; }
+
+    h1 { text-align: center; margin-bottom: 8px; font-size: 1.8rem; color: #f1f5f9; }
+    .subtitle { text-align: center; color: #94a3b8; margin-bottom: 28px; font-size: 0.95rem; }
+
+    /* ── Shared button styles ── */
+    .btn-primary {
+      padding: 12px 24px; background: #6366f1; color: #fff; border: none;
+      border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary {
+      padding: 10px 20px; background: #334155; color: #e2e8f0; border: none;
+      border-radius: 8px; font-size: 0.9rem; cursor: pointer; transition: background 0.2s;
+    }
+    .btn-secondary:hover { background: #475569; }
+
+    /* ── Screen management ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Welcome / Name screen ── */
+    #welcomeScreen { text-align: center; padding-top: 60px; }
+    #welcomeScreen .emoji-hero { font-size: 3.5rem; margin-bottom: 16px; }
+    #welcomeScreen input[type="text"] {
+      width: 100%; max-width: 340px; padding: 14px 18px;
+      border: 2px solid #334155; border-radius: 10px; font-size: 1.1rem;
+      background: #1e293b; color: #e2e8f0; outline: none; text-align: center;
+      transition: border-color 0.2s; margin-bottom: 16px;
+    }
+    #welcomeScreen input[type="text"]:focus { border-color: #6366f1; }
+
+    /* ── Welcome-back banner ── */
+    .welcome-back {
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      padding: 24px; margin-bottom: 24px; text-align: center;
+    }
+    .welcome-back h2 { color: #f1f5f9; margin-bottom: 6px; }
+    .welcome-back .profile-detail { color: #94a3b8; font-size: 0.9rem; margin-bottom: 16px; }
+    .welcome-back .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Map screen ── */
+    #mapScreen { text-align: center; }
+    .map-wrap {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px; margin: 24px 0;
+    }
+    .continent-card {
+      background: #1e293b; border: 2px solid #334155; border-radius: 12px;
+      padding: 20px 12px; cursor: pointer; transition: all 0.2s; text-align: center;
+    }
+    .continent-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+    .continent-card .continent-emoji { font-size: 2.2rem; margin-bottom: 8px; }
+    .continent-card .continent-label { font-size: 0.95rem; color: #e2e8f0; }
+
+    /* ── Country screen ── */
+    #countryScreen .country-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px; margin: 20px 0; max-height: 420px; overflow-y: auto;
+      padding-right: 4px;
+    }
+    #countryScreen .country-grid::-webkit-scrollbar { width: 6px; }
+    #countryScreen .country-grid::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    .country-btn {
+      background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+      padding: 10px 14px; color: #e2e8f0; font-size: 0.9rem; cursor: pointer;
+      transition: all 0.15s; text-align: left; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .country-btn:hover { border-color: #6366f1; background: #253349; }
+
+    /* ── Timezone pick screen ── */
+    #tzPickScreen .tz-pick-list {
+      display: flex; flex-direction: column; gap: 8px; margin: 20px 0;
+      max-height: 380px; overflow-y: auto;
+    }
+    .tz-pick-item {
+      background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+      padding: 14px 18px; cursor: pointer; transition: all 0.15s;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .tz-pick-item:hover { border-color: #6366f1; background: #253349; }
+    .tz-pick-item .tz-pick-name { color: #e2e8f0; font-size: 0.95rem; }
+    .tz-pick-item .tz-pick-time { color: #94a3b8; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+    /* ── Main app (existing styles, preserved) ── */
+    .profile-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 10px 16px; margin-bottom: 20px;
+    }
+    .profile-bar .profile-info { color: #94a3b8; font-size: 0.85rem; }
+    .profile-bar .profile-info strong { color: #f1f5f9; }
+    .profile-bar button {
+      background: none; border: 1px solid #475569; color: #94a3b8; border-radius: 6px;
+      padding: 4px 12px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+    }
+    .profile-bar button:hover { border-color: #6366f1; color: #e2e8f0; }
+
+    .input-row { display: flex; gap: 8px; margin-bottom: 28px; }
+    .input-row select {
+      flex: 1; padding: 12px 14px; border: 2px solid #334155; border-radius: 8px;
+      font-size: 1rem; background: #1e293b; color: #e2e8f0; outline: none;
+      transition: border-color 0.2s; cursor: pointer;
+    }
+    .input-row select:focus { border-color: #6366f1; }
+    .input-row button {
+      padding: 12px 20px; background: #6366f1; color: #fff; border: none;
+      border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .input-row button:hover { background: #4f46e5; }
+
+    .tz-card {
+      background: #1e293b; border-radius: 10px; padding: 16px 18px; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center; border: 1px solid #334155;
+    }
+    .tz-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .tz-name { font-size: 0.85rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tz-time { font-size: 1.4rem; font-weight: 600; color: #f1f5f9; font-variant-numeric: tabular-nums; }
+    .tz-date { font-size: 0.8rem; color: #64748b; }
+    .tz-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: 16px; }
+    .fav-btn {
+      background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px;
+      line-height: 1; transition: transform 0.2s; filter: grayscale(1) opacity(0.4);
+    }
+    .fav-btn:hover { transform: scale(1.2); }
+    .fav-btn.active { filter: none; }
+    .tz-card .delete-btn {
+      background: #dc2626; color: #fff; border: none; border-radius: 6px;
+      padding: 6px 14px; font-size: 0.85rem; cursor: pointer; transition: background 0.2s;
+    }
+    .tz-card .delete-btn:hover { background: #b91c1c; }
+    #tzList { list-style: none; }
+    .empty-msg { text-align: center; color: #64748b; margin-top: 40px; font-size: 0.95rem; }
+    .error-msg { color: #f87171; text-align: center; font-size: 0.85rem; margin-bottom: 12px; display: none; }
+
+    .back-link {
+      color: #6366f1; cursor: pointer; font-size: 0.9rem; display: inline-flex;
+      align-items: center; gap: 4px; margin-bottom: 16px;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    .nav-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ═══ Screen 1: Welcome / Name Entry ═══ -->
+    <div id="welcomeScreen" class="screen active">
+      <div class="emoji-hero">🌍</div>
+      <h1>Time Zone Lookup</h1>
+      <p class="subtitle">Enter your name to get started</p>
+      <div>
+        <input type="text" id="nameInput" placeholder="Your name…" maxlength="40" autocomplete="off">
+      </div>
+      <br>
+      <button class="btn-primary" id="nameSubmitBtn">Continue</button>
+      <div id="welcomeBackArea"></div>
+    </div>
+
+    <!-- ═══ Screen 2: Interactive Map (Continent Selection) ═══ -->
+    <div id="mapScreen" class="screen">
+      <div class="nav-row">
+        <span class="back-link" id="mapBackBtn">← Back</span>
+        <span></span>
+      </div>
+      <h1>Select Your Region</h1>
+      <p class="subtitle">Click a continent to find your country</p>
+      <div class="map-wrap" id="continentGrid"></div>
+    </div>
+
+    <!-- ═══ Screen 3: Country Selection ═══ -->
+    <div id="countryScreen" class="screen">
+      <div class="nav-row">
+        <span class="back-link" id="countryBackBtn">← Back to map</span>
+        <span></span>
+      </div>
+      <h1 id="countryScreenTitle">Countries</h1>
+      <p class="subtitle">Pick your country</p>
+      <div class="country-grid" id="countryGrid"></div>
+    </div>
+
+    <!-- ═══ Screen 4: Time Zone Pick ═══ -->
+    <div id="tzPickScreen" class="screen">
+      <div class="nav-row">
+        <span class="back-link" id="tzPickBackBtn">← Back to countries</span>
+        <span></span>
+      </div>
+      <h1 id="tzPickTitle">Time Zones</h1>
+      <p class="subtitle">Choose your default time zone</p>
+      <div class="tz-pick-list" id="tzPickList"></div>
+    </div>
+
+    <!-- ═══ Screen 5: Main App ═══ -->
+    <div id="mainApp" class="screen">
+      <div class="profile-bar" id="profileBar">
+        <span class="profile-info" id="profileInfo"></span>
+        <button id="switchProfileBtn">Switch profile</button>
+      </div>
+      <h1>Time Zone Lookup</h1>
+      <p class="subtitle">Track the current time across multiple time zones</p>
+      <div class="input-row">
+        <select id="tzSelect"><option value="">-- Select a time zone --</option></select>
+        <button id="addBtn">Add</button>
+      </div>
+      <p class="error-msg" id="errorMsg"></p>
+      <ul id="tzList"></ul>
+      <p class="empty-msg" id="emptyMsg">No time zones added yet. Pick one above!</p>
+    </div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  Data: Continents → Countries → IANA Time Zones
+// ═══════════════════════════════════════════════════
+const REGION_DATA = {
+  'North America': {
+    emoji: '🌎',
+    countries: {
+      '🇺🇸 United States': ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Anchorage','Pacific/Honolulu','America/Phoenix','America/Detroit','America/Indiana/Indianapolis','America/Boise'],
+      '🇨🇦 Canada': ['America/Toronto','America/Vancouver','America/Edmonton','America/Winnipeg','America/Halifax','America/St_Johns','America/Regina'],
+      '🇲🇽 Mexico': ['America/Mexico_City','America/Cancun','America/Monterrey','America/Tijuana','America/Chihuahua','America/Mazatlan'],
+      '🇬🇹 Guatemala': ['America/Guatemala'],
+      '🇧🇿 Belize': ['America/Belize'],
+      '🇭🇳 Honduras': ['America/Tegucigalpa'],
+      '🇸🇻 El Salvador': ['America/El_Salvador'],
+      '🇳🇮 Nicaragua': ['America/Managua'],
+      '🇨🇷 Costa Rica': ['America/Costa_Rica'],
+      '🇵🇦 Panama': ['America/Panama'],
+      '🇨🇺 Cuba': ['America/Havana'],
+      '🇯🇲 Jamaica': ['America/Jamaica'],
+      '🇭🇹 Haiti': ['America/Port-au-Prince'],
+      '🇩🇴 Dominican Republic': ['America/Santo_Domingo'],
+      '🇵🇷 Puerto Rico': ['America/Puerto_Rico'],
+      '🇹🇹 Trinidad & Tobago': ['America/Port_of_Spain'],
+      '🇧🇧 Barbados': ['America/Barbados'],
+    }
+  },
+  'South America': {
+    emoji: '🌎',
+    countries: {
+      '🇧🇷 Brazil': ['America/Sao_Paulo','America/Manaus','America/Recife','America/Belem','America/Fortaleza','America/Cuiaba','America/Campo_Grande'],
+      '🇦🇷 Argentina': ['America/Argentina/Buenos_Aires','America/Argentina/Cordoba','America/Argentina/Mendoza'],
+      '🇨🇱 Chile': ['America/Santiago','Pacific/Easter'],
+      '🇨🇴 Colombia': ['America/Bogota'],
+      '🇵🇪 Peru': ['America/Lima'],
+      '🇻🇪 Venezuela': ['America/Caracas'],
+      '🇪🇨 Ecuador': ['America/Guayaquil','Pacific/Galapagos'],
+      '🇧🇴 Bolivia': ['America/La_Paz'],
+      '🇵🇾 Paraguay': ['America/Asuncion'],
+      '🇺🇾 Uruguay': ['America/Montevideo'],
+      '🇬🇾 Guyana': ['America/Guyana'],
+      '🇸🇷 Suriname': ['America/Paramaribo'],
+    }
+  },
+  'Europe': {
+    emoji: '🌍',
+    countries: {
+      '🇬🇧 United Kingdom': ['Europe/London'],
+      '🇫🇷 France': ['Europe/Paris'],
+      '🇩🇪 Germany': ['Europe/Berlin'],
+      '🇪🇸 Spain': ['Europe/Madrid','Atlantic/Canary'],
+      '🇮🇹 Italy': ['Europe/Rome'],
+      '🇵🇹 Portugal': ['Europe/Lisbon','Atlantic/Azores'],
+      '🇳🇱 Netherlands': ['Europe/Amsterdam'],
+      '🇧🇪 Belgium': ['Europe/Brussels'],
+      '🇨🇭 Switzerland': ['Europe/Zurich'],
+      '🇦🇹 Austria': ['Europe/Vienna'],
+      '🇸🇪 Sweden': ['Europe/Stockholm'],
+      '🇳🇴 Norway': ['Europe/Oslo'],
+      '🇩🇰 Denmark': ['Europe/Copenhagen'],
+      '🇫🇮 Finland': ['Europe/Helsinki'],
+      '🇵🇱 Poland': ['Europe/Warsaw'],
+      '🇨🇿 Czechia': ['Europe/Prague'],
+      '🇬🇷 Greece': ['Europe/Athens'],
+      '🇷🇴 Romania': ['Europe/Bucharest'],
+      '🇭🇺 Hungary': ['Europe/Budapest'],
+      '🇮🇪 Ireland': ['Europe/Dublin'],
+      '🇺🇦 Ukraine': ['Europe/Kyiv'],
+      '🇹🇷 Turkey': ['Europe/Istanbul'],
+      '🇷🇺 Russia': ['Europe/Moscow','Europe/Kaliningrad','Asia/Yekaterinburg','Asia/Novosibirsk','Asia/Krasnoyarsk','Asia/Irkutsk','Asia/Vladivostok','Asia/Kamchatka'],
+      '🇭🇷 Croatia': ['Europe/Zagreb'],
+      '🇷🇸 Serbia': ['Europe/Belgrade'],
+      '🇧🇬 Bulgaria': ['Europe/Sofia'],
+      '🇸🇰 Slovakia': ['Europe/Bratislava'],
+      '🇱🇹 Lithuania': ['Europe/Vilnius'],
+      '🇱🇻 Latvia': ['Europe/Riga'],
+      '🇪🇪 Estonia': ['Europe/Tallinn'],
+      '🇮🇸 Iceland': ['Atlantic/Reykjavik'],
+      '🇱🇺 Luxembourg': ['Europe/Luxembourg'],
+    }
+  },
+  'Africa': {
+    emoji: '🌍',
+    countries: {
+      '🇳🇬 Nigeria': ['Africa/Lagos'],
+      '🇿🇦 South Africa': ['Africa/Johannesburg'],
+      '🇪🇬 Egypt': ['Africa/Cairo'],
+      '🇰🇪 Kenya': ['Africa/Nairobi'],
+      '🇬🇭 Ghana': ['Africa/Accra'],
+      '🇪🇹 Ethiopia': ['Africa/Addis_Ababa'],
+      '🇹🇿 Tanzania': ['Africa/Dar_es_Salaam'],
+      '🇲🇦 Morocco': ['Africa/Casablanca'],
+      '🇹🇳 Tunisia': ['Africa/Tunis'],
+      '🇩🇿 Algeria': ['Africa/Algiers'],
+      '🇸🇳 Senegal': ['Africa/Dakar'],
+      '🇨🇲 Cameroon': ['Africa/Douala'],
+      '🇨🇮 Ivory Coast': ['Africa/Abidjan'],
+      '🇺🇬 Uganda': ['Africa/Kampala'],
+      '🇿🇼 Zimbabwe': ['Africa/Harare'],
+      '🇲🇿 Mozambique': ['Africa/Maputo'],
+      '🇦🇴 Angola': ['Africa/Luanda'],
+      '🇲🇬 Madagascar': ['Indian/Antananarivo'],
+      '🇲🇺 Mauritius': ['Indian/Mauritius'],
+    }
+  },
+  'Asia': {
+    emoji: '🌏',
+    countries: {
+      '🇯🇵 Japan': ['Asia/Tokyo'],
+      '🇨🇳 China': ['Asia/Shanghai','Asia/Urumqi'],
+      '🇮🇳 India': ['Asia/Kolkata'],
+      '🇰🇷 South Korea': ['Asia/Seoul'],
+      '🇮🇩 Indonesia': ['Asia/Jakarta','Asia/Makassar','Asia/Jayapura'],
+      '🇹🇭 Thailand': ['Asia/Bangkok'],
+      '🇻🇳 Vietnam': ['Asia/Ho_Chi_Minh'],
+      '🇵🇭 Philippines': ['Asia/Manila'],
+      '🇲🇾 Malaysia': ['Asia/Kuala_Lumpur'],
+      '🇸🇬 Singapore': ['Asia/Singapore'],
+      '🇵🇰 Pakistan': ['Asia/Karachi'],
+      '🇧🇩 Bangladesh': ['Asia/Dhaka'],
+      '🇱🇰 Sri Lanka': ['Asia/Colombo'],
+      '🇳🇵 Nepal': ['Asia/Kathmandu'],
+      '🇲🇲 Myanmar': ['Asia/Yangon'],
+      '🇰🇭 Cambodia': ['Asia/Phnom_Penh'],
+      '🇱🇦 Laos': ['Asia/Vientiane'],
+      '🇹🇼 Taiwan': ['Asia/Taipei'],
+      '🇭🇰 Hong Kong': ['Asia/Hong_Kong'],
+      '🇲🇳 Mongolia': ['Asia/Ulaanbaatar'],
+      '🇺🇿 Uzbekistan': ['Asia/Tashkent'],
+      '🇰🇿 Kazakhstan': ['Asia/Almaty','Asia/Aqtobe'],
+      '🇦🇪 UAE': ['Asia/Dubai'],
+      '🇸🇦 Saudi Arabia': ['Asia/Riyadh'],
+      '🇮🇱 Israel': ['Asia/Jerusalem'],
+      '🇯🇴 Jordan': ['Asia/Amman'],
+      '🇱🇧 Lebanon': ['Asia/Beirut'],
+      '🇮🇶 Iraq': ['Asia/Baghdad'],
+      '🇮🇷 Iran': ['Asia/Tehran'],
+      '🇦🇫 Afghanistan': ['Asia/Kabul'],
+      '🇶🇦 Qatar': ['Asia/Qatar'],
+      '🇰🇼 Kuwait': ['Asia/Kuwait'],
+      '🇧🇭 Bahrain': ['Asia/Bahrain'],
+      '🇴🇲 Oman': ['Asia/Muscat'],
+    }
+  },
+  'Oceania': {
+    emoji: '🌏',
+    countries: {
+      '🇦🇺 Australia': ['Australia/Sydney','Australia/Melbourne','Australia/Brisbane','Australia/Perth','Australia/Adelaide','Australia/Darwin','Australia/Hobart'],
+      '🇳🇿 New Zealand': ['Pacific/Auckland','Pacific/Chatham'],
+      '🇫🇯 Fiji': ['Pacific/Fiji'],
+      '🇵🇬 Papua New Guinea': ['Pacific/Port_Moresby'],
+      '🇼🇸 Samoa': ['Pacific/Apia'],
+      '🇹🇴 Tonga': ['Pacific/Tongatapu'],
+      '🇬🇺 Guam': ['Pacific/Guam'],
+      '🇳🇨 New Caledonia': ['Pacific/Noumea'],
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════
+//  Profile management (localStorage)
+// ═══════════════════════════════════════════════════
+const PROFILES_KEY = 'tz-profiles';
+
+function loadProfiles() {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function saveProfile(name, country, timezone) {
+  const profiles = loadProfiles();
+  profiles[name.toLowerCase()] = { name, country, timezone, updatedAt: Date.now() };
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+}
+
+function getProfile(name) {
+  return loadProfiles()[name.toLowerCase()] || null;
+}
+
+// ═══════════════════════════════════════════════════
+//  Screen navigation
+// ═══════════════════════════════════════════════════
+let currentName = '';
+let selectedContinent = '';
+let selectedCountry = '';
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── Screen 1: Welcome ──
+const nameInput = document.getElementById('nameInput');
+const nameSubmitBtn = document.getElementById('nameSubmitBtn');
+const welcomeBackArea = document.getElementById('welcomeBackArea');
+
+nameSubmitBtn.addEventListener('click', handleNameSubmit);
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleNameSubmit(); });
+
+function handleNameSubmit() {
+  const name = nameInput.value.trim();
+  if (!name) { nameInput.focus(); return; }
+  currentName = name;
+
+  const profile = getProfile(name);
+  if (profile) {
+    showWelcomeBack(profile);
+  } else {
+    showScreen('mapScreen');
+  }
+}
+
+function showWelcomeBack(profile) {
+  welcomeBackArea.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'welcome-back';
+  div.innerHTML = `
+    <h2>Welcome back, ${escapeHtml(profile.name)}!</h2>
+    <p class="profile-detail">${escapeHtml(profile.country)} · ${profile.timezone.replace(/_/g, ' ')}</p>
+    <div class="btn-row">
+      <button class="btn-primary" id="loadProfileBtn">Load my profile</button>
+      <button class="btn-secondary" id="newSetupBtn">Choose new time zone</button>
+    </div>`;
+  welcomeBackArea.appendChild(div);
+
+  document.getElementById('loadProfileBtn').addEventListener('click', () => {
+    launchMainApp(profile.name, profile.country, profile.timezone);
+  });
+  document.getElementById('newSetupBtn').addEventListener('click', () => {
+    showScreen('mapScreen');
+  });
+}
+
+// ── Screen 2: Map / Continent Grid ──
+const continentGrid = document.getElementById('continentGrid');
+document.getElementById('mapBackBtn').addEventListener('click', () => {
+  welcomeBackArea.innerHTML = '';
+  showScreen('welcomeScreen');
+});
+
+(function buildContinentCards() {
+  for (const [name, data] of Object.entries(REGION_DATA)) {
+    const card = document.createElement('div');
+    card.className = 'continent-card';
+    card.innerHTML = `<div class="continent-emoji">${data.emoji}</div><div class="continent-label">${name}</div>`;
+    card.addEventListener('click', () => { selectedContinent = name; showCountries(name); });
+    continentGrid.appendChild(card);
+  }
+})();
+
+// ── Screen 3: Country Selection ──
+const countryGrid = document.getElementById('countryGrid');
+document.getElementById('countryBackBtn').addEventListener('click', () => showScreen('mapScreen'));
+
+function showCountries(continent) {
+  document.getElementById('countryScreenTitle').textContent = continent;
+  countryGrid.innerHTML = '';
+  const countries = REGION_DATA[continent].countries;
+  for (const countryName of Object.keys(countries)) {
+    const btn = document.createElement('button');
+    btn.className = 'country-btn';
+    btn.textContent = countryName;
+    btn.addEventListener('click', () => { selectedCountry = countryName; showTzPick(continent, countryName); });
+    countryGrid.appendChild(btn);
+  }
+  showScreen('countryScreen');
+}
+
+// ── Screen 4: Time Zone Pick ──
+const tzPickList = document.getElementById('tzPickList');
+document.getElementById('tzPickBackBtn').addEventListener('click', () => showCountries(selectedContinent));
+
+function showTzPick(continent, country) {
+  document.getElementById('tzPickTitle').textContent = country;
+  tzPickList.innerHTML = '';
+  const zones = REGION_DATA[continent].countries[country];
+
+  if (zones.length === 1) {
+    finishSetup(country, zones[0]);
+    return;
+  }
+
+  zones.forEach(tz => {
+    const item = document.createElement('div');
+    item.className = 'tz-pick-item';
+    item.innerHTML = `
+      <span class="tz-pick-name">${tz.replace(/_/g, ' ')}</span>
+      <span class="tz-pick-time">${formatTime(tz)}</span>`;
+    item.addEventListener('click', () => finishSetup(country, tz));
+    tzPickList.appendChild(item);
+  });
+  showScreen('tzPickScreen');
+}
+
+function finishSetup(country, timezone) {
+  saveProfile(currentName, country, timezone);
+  launchMainApp(currentName, country, timezone);
+}
+
+// ═══════════════════════════════════════════════════
+//  Main App (Time Zone Lookup — enhanced)
+// ═══════════════════════════════════════════════════
+const tzSelect = document.getElementById('tzSelect');
+const addBtn = document.getElementById('addBtn');
+const tzList = document.getElementById('tzList');
+const emptyMsg = document.getElementById('emptyMsg');
+const errorMsg = document.getElementById('errorMsg');
+
+const allTimeZones = Intl.supportedValuesOf('timeZone');
+const addedZones = new Set();
+let tickInterval;
+
+function loadFavorites() {
+  try { return JSON.parse(localStorage.getItem('tz-favorites') || '[]'); }
+  catch { return []; }
+}
+function saveFavorites(favs) { localStorage.setItem('tz-favorites', JSON.stringify(favs)); }
+function isFavorite(tz) { return loadFavorites().includes(tz); }
+function toggleFavorite(tz) {
+  const favs = loadFavorites();
+  const idx = favs.indexOf(tz);
+  if (idx === -1) favs.push(tz); else favs.splice(idx, 1);
+  saveFavorites(favs);
+}
+
+allTimeZones.forEach(tz => {
+  const option = document.createElement('option');
+  option.value = tz;
+  option.textContent = tz.replace(/_/g, ' ');
+  tzSelect.appendChild(option);
+});
+
+function formatTime(tz) {
+  return new Date().toLocaleTimeString('en-US', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+function formatDate(tz) {
+  return new Date().toLocaleDateString('en-US', {
+    timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+  });
+}
+function showError(msg) {
+  errorMsg.textContent = msg; errorMsg.style.display = 'block';
+  setTimeout(() => { errorMsg.style.display = 'none'; }, 2500);
+}
+function updateEmptyMsg() { emptyMsg.style.display = tzList.children.length === 0 ? 'block' : 'none'; }
+function tickAll() {
+  tzList.querySelectorAll('li').forEach(li => {
+    const tz = li.dataset.tz;
+    li.querySelector('.tz-time').textContent = formatTime(tz);
+    li.querySelector('.tz-date').textContent = formatDate(tz);
+  });
+}
+
+function addTimeZone(presetTz) {
+  const tz = presetTz || tzSelect.value;
+  if (!tz) { showError('Please select a time zone.'); return; }
+  if (addedZones.has(tz)) { if (!presetTz) showError('That time zone is already in the list.'); return; }
+
+  addedZones.add(tz);
+  const li = document.createElement('li');
+  li.className = 'tz-card'; li.dataset.tz = tz;
+
+  const info = document.createElement('div'); info.className = 'tz-info';
+  const name = document.createElement('span'); name.className = 'tz-name'; name.textContent = tz.replace(/_/g, ' ');
+  const time = document.createElement('span'); time.className = 'tz-time'; time.textContent = formatTime(tz);
+  const date = document.createElement('span'); date.className = 'tz-date'; date.textContent = formatDate(tz);
+  info.append(name, time, date);
+
+  const actions = document.createElement('div'); actions.className = 'tz-actions';
+  const favBtn = document.createElement('button');
+  favBtn.className = 'fav-btn' + (isFavorite(tz) ? ' active' : '');
+  favBtn.textContent = '⭐'; favBtn.title = 'Toggle favorite';
+  favBtn.addEventListener('click', () => { toggleFavorite(tz); favBtn.classList.toggle('active'); });
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'delete-btn'; deleteBtn.textContent = 'Delete';
+  deleteBtn.addEventListener('click', () => {
+    addedZones.delete(tz); li.remove(); updateEmptyMsg();
+    if (addedZones.size === 0) clearInterval(tickInterval);
+  });
+
+  actions.append(favBtn, deleteBtn);
+  li.append(info, actions);
+  tzList.appendChild(li);
+
+  if (!presetTz) tzSelect.value = '';
+  updateEmptyMsg();
+  if (addedZones.size === 1) { clearInterval(tickInterval); tickInterval = setInterval(tickAll, 1000); }
+}
+
+addBtn.addEventListener('click', () => addTimeZone());
+
+// Profile bar in main app
+document.getElementById('switchProfileBtn').addEventListener('click', () => {
+  clearInterval(tickInterval);
+  addedZones.clear();
+  tzList.innerHTML = '';
+  updateEmptyMsg();
+  welcomeBackArea.innerHTML = '';
+  nameInput.value = '';
+  showScreen('welcomeScreen');
+});
+
+function launchMainApp(name, country, timezone) {
+  const profileInfo = document.getElementById('profileInfo');
+  profileInfo.innerHTML = `<strong>${escapeHtml(name)}</strong> · ${escapeHtml(country)} · ${timezone.replace(/_/g, ' ')}`;
+  showScreen('mainApp');
+
+  // Pre-add the user's default timezone
+  addTimeZone(timezone);
+
+  // Also load favorites
+  loadFavorites().forEach(tz => addTimeZone(tz));
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
